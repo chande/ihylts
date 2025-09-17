@@ -1,0 +1,148 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: penny_arcade_db
+    environment:
+      POSTGRES_DB: comics
+      POSTGRES_USER: username
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - pa_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U username -d comics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  scraper:
+    build:
+      context: ./backend
+      dockerfile: scraper/Dockerfile
+    container_name: penny_arcade_scraper
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://username:password@postgres:5432/comics
+      SCRAPE_INTERVAL_SECONDS: 10
+      PENNY_ARCADE_BASE_URL: https://www.penny-arcade.com
+      RABBITMQ_HOST: rabbitmq
+      PYTHONPATH: /app
+    volumes:
+      - ./backend:/app
+    networks:
+      - pa_network
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: penny_arcade_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - pa_network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  analyzer:
+    build:
+      context: ./backend
+      dockerfile: analyzer/Dockerfile
+    container_name: penny_arcade_analyzer
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://username:password@postgres:5432/comics
+      RABBITMQ_HOST: rabbitmq
+      PYTHONPATH: /app
+    volumes:
+      - ./backend:/app
+    networks:
+      - pa_network
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: api/Dockerfile
+    container_name: penny_arcade_api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://username:password@postgres:5432/comics
+      PYTHONPATH: /app
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+    networks:
+      - pa_network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: penny_arcade_frontend
+    environment:
+      CHOKIDAR_USEPOLLING: 'true'
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - pa_network
+    restart: unless-stopped
+
+  tests:
+    build:
+      context: ./backend
+      dockerfile: scraper/Dockerfile  # Reuse scraper Dockerfile since it has all dependencies
+    container_name: penny_arcade_tests
+    environment:
+      PYTHONPATH: /app
+    volumes:
+      - ./backend:/app
+    networks:
+      - pa_network
+    command: ["python", "run_tests.py"]
+    profiles:
+      - testing
+
+  prometheus:
+    image: prom/prometheus:v2.47.2
+    container_name: penny_arcade_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - pa_network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    restart: unless-stopped
+
+networks:
+  pa_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
