@@ -10,9 +10,6 @@ beautifulsoup4==4.12.2
 # HTML parsing
 lxml==4.9.3
 
-# Message queue
-pika==1.3.2
-
 # Scheduling (optional, if you want more sophisticated scheduling)
 schedule==1.2.0
 

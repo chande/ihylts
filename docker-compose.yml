@@ -41,40 +41,6 @@ services:
       - pa_network
     restart: unless-stopped
 
-  rabbitmq:
-    image: rabbitmq:3.13-management
-    container_name: penny_arcade_rabbitmq
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    networks:
-      - pa_network
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  analyzer:
-    build:
-      context: ./backend
-      dockerfile: analyzer/Dockerfile
-    container_name: penny_arcade_analyzer
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://username:password@postgres:5432/comics
-      RABBITMQ_HOST: rabbitmq
-      PYTHONPATH: /app
-    volumes:
-      - ./backend:/app
-    networks:
-      - pa_network
-    restart: unless-stopped
-
   api:
     build:
       context: ./backend
