@@ -6,9 +6,16 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from bs4 import BeautifulSoup
 import requests
+import json
+import pytesseract
+import re
+import json
+import requests
+import re
+from PIL import Image
+from io import BytesIO
 
 from database.manager import DatabaseManager
-from task_queue.manager import QueueManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,9 +26,8 @@ logger = logging.getLogger(__name__)
 
 class PennyArcadeScraper:
     
-    def __init__(self, db_connection: DatabaseManager, queue_manager: QueueManager, base_url: str):
+    def __init__(self, db_connection: DatabaseManager, base_url: str):
         self.db = db_connection
-        self.queue = queue_manager
         self.base_url = base_url
         self.session = None  # Will hold requests session
 
@@ -157,12 +163,121 @@ class PennyArcadeScraper:
                 "panel_urls": comic_data["panel_urls"],
                 "title": comic_data["title"]
             }
-            self.queue.send_message(message)
+            self.analyze_comic(message)
             
             return comic_id
         else:
             logger.error(f"Failed to add comic '{comic_data['title']}' to database.")
             return None
+        
+    def filter_copyright_text(self, text: str) -> str:
+        if not text:
+            return text
+        
+        copyright_pattern = r'(copyright|©)\s*\d{4}\s*Mike\s*Krahulik\s*(?:&|and)\s*Jerry\s*Holkins'
+        
+        url_pattern = r'www\.penny-arcade\.com'
+        
+        # Remove copyright text
+        cleaned_text = re.sub(copyright_pattern, '', text, flags=re.IGNORECASE)
+        
+        # Remove URL
+        cleaned_text = re.sub(url_pattern, '', cleaned_text, flags=re.IGNORECASE)
+        
+        # Clean up extra whitespace and multiple spaces
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text)
+        
+        return cleaned_text.strip()        
+        
+    def extract_text_from_image(self, image: Image.Image) -> str:
+        try:
+            # Convert to grayscale
+            gray_image = image.convert('L')
+
+            text = pytesseract.image_to_string(gray_image)
+            text = text.strip()
+            
+            logger.info(f"Extracted text: {text[:100]}..." if len(text) > 100 else f"Extracted text: {text}")
+            return text
+        except Exception as e:
+            logger.error(f"Failed to extract text from image: {e}")
+            return ""        
+        
+    def download_image(self, url: str) -> Optional[Image.Image]:
+        try:
+            response = self.session.get(url, timeout=30)
+            response.raise_for_status()
+            
+            image = Image.open(BytesIO(response.content))
+            logger.info(f"Successfully downloaded image from {url}")
+            return image
+        except Exception as e:
+            logger.error(f"Failed to download image from {url}: {e}")
+            return None        
+        
+    def process_comic_panels(self, panel_urls: Dict[str, Any]) -> Dict[str, Any]:
+        text_data = {"num_panels": panel_urls.get("num_panels", 0)}
+        
+        num_panels = panel_urls.get("num_panels", 0)
+        
+        for i in range(1, num_panels + 1):
+            panel_key = f"panel{i}"
+            panel_url = panel_urls.get(panel_key)
+            
+            if not panel_url:
+                logger.warning(f"No URL found for {panel_key}")
+                text_data[panel_key] = ""
+                continue
+            
+            image = self.download_image(panel_url)
+            if not image:
+                text_data[panel_key] = ""
+                continue
+            
+            raw_text = self.extract_text_from_image(image)
+            
+            clean_text = self.filter_copyright_text(raw_text)
+            
+            text_data[panel_key] = clean_text
+            logger.info(f"Processed {panel_key}: '{clean_text[:50]}...' " if len(clean_text) > 50 else f"Processed {panel_key}: '{clean_text}'")
+        
+        return text_data        
+        
+    def analyze_comic(self, message_data: Dict[str, Any]) -> bool:
+        try:
+            comic_id = message_data.get("comic_id")
+            title = message_data.get("title", "Unknown")
+            panel_urls = message_data.get("panel_urls", {})
+
+            if isinstance(panel_urls, str):
+                logger.warning("panel_urls field is a string, attempting to parse as JSON.")
+                try:
+                    panel_urls = json.loads(panel_urls)
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to decode panel_urls JSON string for comic ID {comic_id}")
+                    return False
+            
+            logger.info(f"Starting analysis of comic ID {comic_id}: {title}")
+            
+            text_data = self.process_comic_panels(panel_urls)
+            
+            updates = {
+                "text": text_data,
+                "processed": True
+            }
+            
+            success = self.db.update_comic(comic_id, updates)
+            
+            if success:
+                logger.info(f"Successfully completed analysis of comic ID {comic_id}")
+                return True
+            else:
+                logger.error(f"Failed to update database for comic ID {comic_id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error analyzing comic: {e}")
+            return False        
     
     def run_scraping_cycle(self):
         logger.info("Starting scraping cycle")
@@ -201,12 +316,9 @@ def main():
         logger.error("DATABASE_URL and PENNY_ARCADE_BASE_URL must be set")
         sys.exit(1)
 
-    db_manager = DatabaseManager(db_url)
-    queue_manager = QueueManager()
-    
+    db_manager = DatabaseManager(db_url)    
     scraper = PennyArcadeScraper(
         db_connection=db_manager,
-        queue_manager=queue_manager,
         base_url=base_url
     )
     scraper.initialize_session()

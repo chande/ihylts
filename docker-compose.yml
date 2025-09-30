@@ -29,8 +29,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
     environment:
       DATABASE_URL: postgresql://username:password@postgres:5432/comics
       SCRAPE_INTERVAL_SECONDS: 10
