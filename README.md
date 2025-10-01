@@ -11,7 +11,6 @@ This project aims to solve that problem by extracting the text from every comic 
 ## Tech Stack
 
 - **Database:** PostgreSQL  
-- **Messaging:** RabbitMQ  
 - **Services:** Python (collector & analyzer), Flask (REST API)  
 - **OCR:** `pytesseract`  
 - **Frontend:** React  
@@ -40,22 +39,10 @@ This project aims to solve that problem by extracting the text from every comic 
 5. Extract title, publication date, and panel image URLs.  
 6. Insert the new comic into the database.  
 7. Publish a message to RabbitMQ with the new comic’s ID, title, and panel URLs.
-
----
-
-## Queue
-
-- **RabbitMQ** facilitates notifications from the collector to the analyzer indicating a new comic is ready for OCR.
-
----
-
-## Data Analysis (Python service)
-
-1. Consume a message from the queue.  
-2. For each panel URL (one or more), request the image.  
-3. Extract text with `pytesseract`.  
-4. Sanitize/normalize the extracted text.  
-5. Update the corresponding database record with the OCR results.
+8. For each panel URL (one or more), request the image.  
+9. Extract text with `pytesseract`.  
+10. Sanitize/normalize the extracted text.  
+11. Update the corresponding database record with the OCR results.
 
 ---
 
