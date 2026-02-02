@@ -22,11 +22,9 @@ This project aims to solve that problem by extracting the text from every comic 
 
 - **Database** (Postgres) stores comics, OCR text, panel URLs, and metadata.  
 - **Data Collector** crawls forward through comics and publishes new items to a queue.  
-- **Queue** (RabbitMQ) signals that a comic is ready for OCR.  
 - **Data Analysis** fetches panels, runs OCR, sanitizes text, and updates the DB.  
 - **REST API** exposes searchable data.  
 - **Frontend** performs full-text search and highlights matches.  
-- **Metrics** are scraped/collected by Prometheus.
 
 ---
 
@@ -38,11 +36,10 @@ This project aims to solve that problem by extracting the text from every comic 
 4. Request the following comic.  
 5. Extract title, publication date, and panel image URLs.  
 6. Insert the new comic into the database.  
-7. Publish a message to RabbitMQ with the new comic’s ID, title, and panel URLs.
-8. For each panel URL (one or more), request the image.  
-9. Extract text with `pytesseract`.  
-10. Sanitize/normalize the extracted text.  
-11. Update the corresponding database record with the OCR results.
+7. For each panel URL (one or more), request the image.  
+8. Extract text with `pytesseract`.  
+9. Sanitize/normalize the extracted text.  
+10. Update the corresponding database record with the OCR results.
 
 ---
 
@@ -58,12 +55,6 @@ This project aims to solve that problem by extracting the text from every comic 
 
 - Calls `/api/comics/searchable` and provides full-text search over **title** and **text**.  
 - Highlights matching query terms in results.
-
----
-
-## Metrics
-
-- **Prometheus** collects and scrapes service metrics.
 
 ---
 
