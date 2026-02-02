@@ -2,7 +2,7 @@
 
 Penny Arcade is a webcomic with over 25 years of material online at [penny-arcade.com](https://www.penny-arcade.com/). The topics covered in the comics span video games, philosophy, film, and parenting, among many others. Often, something in my daily life will remind me of a Penny Arcade strip, which makes me want to revisit a specific comic. I haven’t memorized all 4,000+ titles, though, so it’s often hard to find the strip I'm interested in. The official site provides a search option, but it doesn’t include the ability to search the actual text from the strip. I can often remember the specific punchline or dialogue that I want to find, so being able to search the actual text would be most beneficial to me. 
 
-This project aims to solve that problem by extracting the text from every comic and storing it in a database for quick lookup. The frontend is a simple search box that allows for full-text search of Penny Arcade’s decade-spanning corpus. 
+This project aims to solve that problem by extracting the text from every comic and storing it in a database for quick lookup. The frontend is a simple search box that allows for full-text search of Penny Arcade’s decades-spanning corpus. 
 
 **Production site:** https://ihylts.com
 
